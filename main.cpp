@@ -1,3 +1,6 @@
+extern "C" {
+#include "../dwarf/inc/dl_parser.h"
+}
 #include "imgui.h"
 #include "imgui_internal.h" // Required for DockBuilder and hiding tabs
 #include "imgui_impl_glfw.h"
@@ -19,9 +22,9 @@ void SetupImHexLayout(ImGuiID dockspace_id) {
     ImGuiID dock_left_id = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Left, 0.30f, nullptr, &dock_main_id);
 
     // 3. Assign windows to nodes
-    ImGui::DockBuilderDockWindow("Hex Editor", dock_main_id);
-    ImGui::DockBuilderDockWindow("Data Inspector", dock_left_id);
-    ImGui::DockBuilderDockWindow("Disassembly", dock_right_id);
+    ImGui::DockBuilderDockWindow("Data Inspector", dock_main_id);
+    ImGui::DockBuilderDockWindow("Address Space", dock_left_id);
+    ImGui::DockBuilderDockWindow("Debug Info", dock_right_id);
     ImGui::DockBuilderDockWindow("Console", dock_bottom_id);
 
     // 4. HIDE TABS (The ImHex "Pane" Look)
@@ -46,12 +49,23 @@ int main() {
     ImGuiIO& io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
+    // font
+    io.Fonts->Clear();
+    io.Fonts->AddFontFromFileTTF("/usr/share/fonts/TTF/JetBrainsMono-Light.ttf", 16);
+    // io.Fonts->AddFontFromFileTTF(ofToDataPath("fonts/OpenSans-Regular.ttf", true).c_str(), 16);
+    // io.Fonts->AddFontFromFileTTF(ofToDataPath("fonts/OpenSans-Light.ttf", true).c_str(), 32);
+    // io.Fonts->AddFontFromFileTTF(ofToDataPath("fonts/OpenSans-Regular.ttf", true).c_str(), 11);
+    // io.Fonts->AddFontFromFileTTF(ofToDataPath("fonts/OpenSans-Bold.ttf", true).c_str(), 11);
+    //io.Fonts->Build();
+
     // Theme: Deep Dark (ImHex Aesthetic)
     ImGui::StyleColorsDark();
     ImGuiStyle& style = ImGui::GetStyle();
     style.WindowRounding = 0.0f;
-    style.Colors[ImGuiCol_WindowBg] = ImVec4(0.07f, 0.07f, 0.07f, 1.00f);
-    style.Colors[ImGuiCol_TitleBgActive] = ImVec4(0.12f, 0.12f, 0.12f, 1.00f);
+    style.Colors[ImGuiCol_WindowBg] = ImVec4(0.063, 0.063, 0.063, 1.00);
+    style.Colors[ImGuiCol_TitleBg] = ImVec4(0.141, 0.137, 0.133, 1.00);
+    style.Colors[ImGuiCol_TitleBgActive] = ImVec4(0.141, 0.137, 0.133, 1.00);
+    style.Colors[ImGuiCol_Separator] = ImVec4(0.184, 0.180, 0.20, 1.0);
 
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 130");
@@ -63,9 +77,15 @@ int main() {
         ImGui::NewFrame();
 
         // [A] MAIN MENU BAR
+        static char binary_path[255] = "";
+        static bool show_load_popup = false;
+
         if (ImGui::BeginMainMenuBar()) {
             if (ImGui::BeginMenu("File")) {
-                if (ImGui::MenuItem("Open Binary...")) {}
+                if (ImGui::MenuItem("Open Binary...")) {
+                    show_load_popup = true;
+                }
+                ImGui::Separator();
                 if (ImGui::MenuItem("Exit", "Alt+F4")) break;
                 ImGui::EndMenu();
             }
@@ -76,6 +96,38 @@ int main() {
                 ImGui::EndMenu();
             }
             ImGui::EndMainMenuBar();
+        }
+
+        if (show_load_popup) {
+            ImGui::OpenPopup("Load Executable");
+        }
+
+        if (ImGui::BeginPopupModal("Load Executable", NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
+            ImGui::Text("Enter absolute path to binary:");
+            ImGui::InputText("##path", binary_path, IM_ARRAYSIZE(binary_path));
+
+            if (ImGui::Button("Launch & Trace", ImVec2(120, 0))) {
+                // pid_t child = fork();
+                // if (child == 0) {
+                //     // --- CHILD PROCESS ---
+                //     ptrace(PTRACE_TRACEME, 0, nullptr, nullptr);
+                //     execl(binary_path, binary_path, nullptr);
+                //     exit(1); // Should not reach here
+                // } else if (child > 0) {
+                //     // --- PARENT PROCESS (vdbug) ---
+                //     target_pid = child;
+                //     int status;
+                //     waitpid(target_pid, &status, 0); // Wait for child to stop at start
+                //     show_load_popup = false;
+                // }
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Cancel", ImVec2(120, 0))) { 
+                show_load_popup = false;
+                ImGui::CloseCurrentPopup(); 
+            }
+            ImGui::EndPopup();
         }
 
         // [B] DOCKSPACE SETUP
@@ -92,11 +144,11 @@ int main() {
         // [C] WINDOW CONTENT (Must match the strings in DockBuilderDockWindow)
         ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoCollapse;
 
-        ImGui::Begin("Hex Editor", nullptr, window_flags);
+        ImGui::Begin("Data Inspector", nullptr, window_flags);
         ImGui::Text("00000000: 48 89 E5 48 83 EC 10 0F B6 45 F7 48 8D 3D ... ");
         ImGui::End();
 
-        ImGui::Begin("Data Inspector", nullptr, window_flags);
+        ImGui::Begin("Address Space", nullptr, window_flags);
         if (ImGui::BeginTable("Regs", 2, ImGuiTableFlags_Borders)) {
             ImGui::TableNextRow(); ImGui::TableSetColumnIndex(0); ImGui::Text("RAX");
             ImGui::TableSetColumnIndex(1); ImGui::Text("0xDEADC0DE");
@@ -104,7 +156,7 @@ int main() {
         }
         ImGui::End();
 
-        ImGui::Begin("Disassembly", nullptr, window_flags);
+        ImGui::Begin("Debug Info", nullptr, window_flags);
         ImGui::TextColored(ImVec4(0.4f, 0.8f, 0.4f, 1.0f), "0x401050: push rbp");
         ImGui::TextColored(ImVec4(0.4f, 0.8f, 0.4f, 1.0f), "0x401051: mov  rbp, rsp");
         ImGui::End();

@@ -1,22 +1,24 @@
 # 1. Compiler and Flags
 CXX = g++
-CXXFLAGS = -std=c++17 -I./imgui -I./imgui/backends -g -O2
-LIBS = -lglfw -lGL -ldl -lpthread
+CC = gcc
+CXXFLAGS = -std=c++17 -I./imgui -I./imgui/backends -I./dwarf/inc -g -O2
+CFLAGS = -I./dwarf/inc -g
+LIBS = -lglfw -lGL -ldl -lpthread -ldw -lelf
 
 # 2. Source Files
-# Your project files
 SRCS = main.cpp tracer.cpp
+# Add your C source here
+C_SRCS = dwarf/dl_parser.c 
 
-# ImGui Core files
 IMGUI_SRCS = imgui/imgui.cpp imgui/imgui_draw.cpp imgui/imgui_tables.cpp \
              imgui/imgui_widgets.cpp imgui/imgui_demo.cpp
 
-# ImGui Backend files (GLFW + OpenGL3)
 BACKEND_SRCS = imgui/backends/imgui_impl_glfw.cpp \
                imgui/backends/imgui_impl_opengl3.cpp
 
-# 3. Object Files (Automatic mapping of .cpp to .o)
-OBJS = $(SRCS:.cpp=.o) $(IMGUI_SRCS:.cpp=.o) $(BACKEND_SRCS:.cpp=.o)
+# 3. Object Files
+# Map both .cpp and .c files to .o
+OBJS = $(SRCS:.cpp=.o) $(IMGUI_SRCS:.cpp=.o) $(BACKEND_SRCS:.cpp=.o) $(C_SRCS:.c=.o)
 
 # 4. Target Executable
 EXE = vdbug
@@ -27,9 +29,13 @@ all: $(EXE)
 $(EXE): $(OBJS)
 	$(CXX) $(CXXFLAGS) -o $@ $^ $(LIBS)
 
-# Pattern rule to compile .cpp to .o
+# Rule for C++ files
 %.o: %.cpp
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
+
+# Rule for C files (The DWARF parser)
+%.o: %.c
+	$(CC) $(CFLAGS) -c -o $@ $<
 
 clean:
 	rm -f $(EXE) $(OBJS)
